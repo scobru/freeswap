@@ -32,7 +32,8 @@ $("app").innerHTML = `
   <label>You receive (min after ${Number(SLIPPAGE_BPS) / 100}% slippage)</label>
   <div class="row"><output id="out">-</output><b id="symOut">USDC</b></div>
   <button id="go" type="button">Connect wallet</button>
-  <p id="msg" role="status"></p>`;
+  <p id="msg" role="status"></p>
+  <button id="diag" type="button">Diagnose wallet</button>`;
 const style = document.createElement("style");
 style.textContent = `body{font:16px system-ui;max-width:26rem;margin:2rem auto;padding:0 16px}
 .row{display:flex;gap:8px;align-items:center;margin:4px 0 12px}input{flex:1;font-size:1.2rem;padding:8px}
@@ -150,6 +151,21 @@ let timer: number | undefined;
 $("amt").addEventListener("input", () => { label(); clearTimeout(timer); timer = window.setTimeout(() => void refresh(), 400); });
 $("flip").addEventListener("click", () => { dir = dir === "eth-usdc" ? "usdc-eth" : "eth-usdc"; ($("amt") as HTMLInputElement).value = ""; void refresh(); });
 $("go").addEventListener("click", () => void act());
+// Facts about what the Freenet sandbox lets a wallet do, so we can pick a workaround without console sessions.
+$("diag").addEventListener("click", async () => {
+  const w = window.open("about:blank"); // first: popups need the click's user activation
+  w?.close();
+  const flags = ["isMetaMask", "isPhantom", "isRabby", "isBraveWallet", "isCoinbaseWallet"].filter((k) => (legacy as unknown as Record<string, unknown> | undefined)?.[k]);
+  const lines = [
+    `origin: ${window.origin}, framed: ${window.top !== window}`,
+    `window.ethereum: ${legacy ? flags.join(",") || "present, unknown wallet" : "none"}`,
+    `EIP-6963 wallets: ${wallets.filter((x) => x.name !== "window.ethereum").map((x) => x.name).join(", ") || "none"}`,
+    `window.open: ${w ? "allowed" : "blocked"}`,
+  ];
+  say(lines.join("\n"));
+  try { lines.push("eth_chainId: " + (await rpc<string>("eth_chainId", [], 5000))); } catch (e) { lines.push("eth_chainId: " + (e as Error).message); }
+  say(lines.join("\n"));
+});
 const sel = $("wallet") as HTMLSelectElement;
 const fill = () => { const i = Math.max(sel.selectedIndex, 0); sel.replaceChildren(...wallets.map((w, j) => new Option(w.name, String(j)))); sel.selectedIndex = i; eth = wallets[i]?.provider; };
 sel.addEventListener("change", () => { eth = wallets[sel.selectedIndex].provider; account = undefined; ready = false; say(""); void refresh(); });
