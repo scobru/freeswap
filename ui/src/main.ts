@@ -5,9 +5,13 @@ import { abi, quoteCall, swapCall, type Dir } from "./swap.ts";
 // Wallet-only: the Freenet sandbox blocks fetch to external RPCs, so every read and write goes through window.ethereum.
 type Eip1193 = { request(a: { method: string; params?: unknown[] }): Promise<unknown> };
 const eth = (window as unknown as { ethereum?: Eip1193 }).ethereum;
-const rpc = <T>(method: string, params: unknown[] = []) => {
+// A wallet that never answers (e.g. blocked inside the Freenet sandbox) must surface as an error, not a stuck button.
+const rpc = <T>(method: string, params: unknown[] = [], ms = 20_000) => {
   if (!eth) throw new Error("No wallet found (window.ethereum)");
-  return eth.request({ method, params }) as Promise<T>;
+  return Promise.race([
+    eth.request({ method, params }) as Promise<T>,
+    new Promise<never>((_, no) => setTimeout(() => no(new Error(`Wallet did not answer ${method} within ${ms / 1000}s. The Freenet sandbox may be blocking the wallet.`)), ms)),
+  ]);
 };
 const ethCall = (to: Address, data: Hex) => rpc<Hex>("eth_call", [{ to, data }, "latest"]);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -49,7 +53,7 @@ async function preflight(): Promise<string[]> {
 }
 
 async function ensureChain() {
-  if ((await rpc<string>("eth_chainId")) !== CHAIN_ID_HEX) await rpc("wallet_switchEthereumChain", [{ chainId: CHAIN_ID_HEX }]);
+  if ((await rpc<string>("eth_chainId")) !== CHAIN_ID_HEX) await rpc("wallet_switchEthereumChain", [{ chainId: CHAIN_ID_HEX }], 60_000);
   if ((await rpc<string>("eth_chainId")) !== CHAIN_ID_HEX) throw new Error("Wallet is not on Base");
 }
 
@@ -97,10 +101,11 @@ async function wait(hash: Hex) {
   throw new Error("Timed out waiting for " + hash);
 }
 const send = async (to: Address, data: Hex, value = 0n) =>
-  rpc<Hex>("eth_sendTransaction", [{ from: account, to, data, value: "0x" + value.toString(16) }]);
+  rpc<Hex>("eth_sendTransaction", [{ from: account, to, data, value: "0x" + value.toString(16) }], 180_000);
 
 async function connect() {
-  const accs = await rpc<Address[]>("eth_requestAccounts");
+  say("Waiting for the wallet popup…");
+  const accs = await rpc<Address[]>("eth_requestAccounts", [], 60_000);
   account = getAddress(accs[0]);
   await ensureChain();
   const bad = await preflight();
