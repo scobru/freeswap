@@ -28,6 +28,7 @@ const bridge: Eip1193 = {
     const id = nextId++;
     return popupReady!.then(() => new Promise((ok, no) => {
       waiting.set(id, (m) => (m.error ? no(Object.assign(new Error(m.error.message), m.error)) : ok(m.result)));
+      popup!.focus(); // best effort: brings the popup forward when the browser allows it
       popup!.postMessage({ id, method, params }, BRIDGE_ORIGIN);
     }));
   },
@@ -70,6 +71,7 @@ output{flex:1;font-size:1.2rem;padding:8px}button{width:100%;padding:12px;font-s
 document.head.append(style);
 
 const say = (t: string) => ($("msg").textContent = t);
+const confirmIn = () => (eth === bridge ? "the wallet popup (click its button)" : "your wallet");
 let dir: Dir = "eth-usdc", account: Address | undefined, quote = 0n, amountIn = 0n, allowance = 0n, ready = false, busy = false;
 const dec = (d: Dir) => (d === "eth-usdc" ? 18 : 6);
 const sym = (d: Dir) => (d === "eth-usdc" ? ["ETH", "USDC"] : ["USDC", "ETH"]);
@@ -157,13 +159,13 @@ async function act() {
       if (amountIn <= 0n) throw new Error("Enter an amount");
       if (amountIn > (await balance())) throw new Error("Insufficient balance");
       if (dir === "usdc-eth" && amountIn > allowance) {
-        say("Confirm the approval in your wallet…");
+        say(`Confirm the approval in ${confirmIn()}…`);
         await wait(await send(ADDR.usdc, encodeFunctionData({ abi, functionName: "approve", args: [ADDR.router, amountIn] }))); // exact amount, not infinite
       } else {
         const res = decodeFunctionResult({ abi, functionName: "quoteExactInputSingle", data: await ethCall(ADDR.quoter, quoteCall(dir, amountIn)) });
         const deadline = BigInt(Math.floor(Date.now() / 1000) + DEADLINE_SECS);
         const { data, value } = swapCall(dir, account, amountIn, res[0], SLIPPAGE_BPS, deadline);
-        say("Confirm the swap in your wallet…");
+        say(`Confirm the swap in ${confirmIn()}…`);
         const hash = await send(ADDR.router, data, value);
         say("Pending: " + hash);
         await wait(hash);
