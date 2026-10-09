@@ -17,7 +17,7 @@ export const abi = parseAbi([
 ]);
 
 // SwapRouter02 sentinel: pay out to the router itself so unwrapWETH9 can turn WETH into ETH.
-const ADDRESS_THIS: Address = "0x0000000000000000000000000000000000000002";
+export const ADDRESS_THIS: Address = "0x0000000000000000000000000000000000000002";
 
 export const minOut = (quote: bigint, bps: bigint) => (quote * (10_000n - bps)) / 10_000n;
 

@@ -12,3 +12,5 @@ export const ADDR = {
 export const FEE = 500;
 export const SLIPPAGE_BPS = 50n;
 export const DEADLINE_SECS = 600;
+// Where bridge.html is published (GitHub Pages, see README). It must be a normal https origin, not Freenet.
+export const BRIDGE_URL = "https://scobru.github.io/freeswap/bridge.html";

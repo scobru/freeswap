@@ -1,13 +1,41 @@
 import { decodeFunctionResult, encodeFunctionData, formatUnits, getAddress, parseUnits, type Address, type Hex } from "viem";
-import { ADDR, CHAIN_ID_HEX, DEADLINE_SECS, FEE, SLIPPAGE_BPS } from "./config.ts";
+import { ADDR, BRIDGE_URL, CHAIN_ID_HEX, DEADLINE_SECS, FEE, SLIPPAGE_BPS } from "./config.ts";
 import { abi, quoteCall, swapCall, type Dir } from "./swap.ts";
 
-// Wallet-only: the Freenet sandbox blocks fetch to external RPCs, so every read and write goes through window.ethereum.
+// Wallet-only: the Freenet sandbox blocks fetch to external RPCs, so every read and write goes through the wallet.
 type Eip1193 = { request(a: { method: string; params?: unknown[] }): Promise<unknown> };
 const legacy = (window as unknown as { ethereum?: Eip1193 }).ethereum;
+
+// Wallet extensions can't answer inside the Freenet sandbox (opaque origin), so bridge.html, served from a normal
+// origin and opened as a popup, relays each request to the wallet there.
+const BRIDGE_ORIGIN = new URL(BRIDGE_URL).origin;
+let popup: Window | null = null, popupReady: Promise<void> | undefined, onReady = () => {}, nextId = 1;
+const waiting = new Map<number, (m: { result?: unknown; error?: { code?: number; message?: string } }) => void>();
+addEventListener("message", (e) => {
+  if (!popup || e.source !== popup || e.origin !== BRIDGE_ORIGIN) return;
+  const id = e.data?.freeswapBridge;
+  if (id === "ready") onReady();
+  else if (id === "closed") popup = null;
+  else { waiting.get(id)?.(e.data); waiting.delete(id); }
+});
+const bridge: Eip1193 = {
+  request({ method, params }) {
+    if (!popup || popup.closed) {
+      popup = window.open(BRIDGE_URL, "freeswap-bridge", "popup,width=420,height=600"); // needs this click's user activation
+      if (!popup) return Promise.reject(new Error("The wallet popup was blocked. Allow popups for FreeSwap and try again."));
+      popupReady = new Promise((r) => (onReady = r));
+    }
+    const id = nextId++;
+    return popupReady!.then(() => new Promise((ok, no) => {
+      waiting.set(id, (m) => (m.error ? no(Object.assign(new Error(m.error.message), m.error)) : ok(m.result)));
+      popup!.postMessage({ id, method, params }, BRIDGE_ORIGIN);
+    }));
+  },
+};
+
 // EIP-6963: several wallet extensions can be installed and only one owns window.ethereum, so let the user pick.
-const wallets: { name: string; provider: Eip1193 }[] = legacy ? [{ name: "window.ethereum", provider: legacy }] : [];
-let eth: Eip1193 | undefined = legacy;
+const wallets: { name: string; provider: Eip1193 }[] = [{ name: "Wallet in popup", provider: bridge }, ...(legacy ? [{ name: "window.ethereum", provider: legacy }] : [])];
+let eth: Eip1193 | undefined = bridge;
 // A wallet that never answers (e.g. blocked inside the Freenet sandbox) must surface as an error, not a stuck button.
 const rpc = <T>(method: string, params: unknown[] = [], ms = 20_000) => {
   if (!eth) throw new Error("No wallet found (window.ethereum)");
@@ -159,7 +187,7 @@ $("diag").addEventListener("click", async () => {
   const lines = [
     `origin: ${window.origin}, framed: ${window.top !== window}`,
     `window.ethereum: ${legacy ? flags.join(",") || "present, unknown wallet" : "none"}`,
-    `EIP-6963 wallets: ${wallets.filter((x) => x.name !== "window.ethereum").map((x) => x.name).join(", ") || "none"}`,
+    `EIP-6963 wallets: ${wallets.slice(legacy ? 2 : 1).map((x) => x.name).join(", ") || "none"}`,
     `window.open: ${w ? "allowed" : "blocked"}`,
   ];
   say(lines.join("\n"));
@@ -175,4 +203,3 @@ addEventListener("eip6963:announceProvider", (e) => {
 });
 dispatchEvent(new Event("eip6963:requestProvider"));
 fill();
-if (!wallets.length) say("No wallet detected in this page.");
