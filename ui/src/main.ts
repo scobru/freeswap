@@ -5,7 +5,6 @@ import { STYLE } from "./style.ts";
 
 // Wallet-only: the Freenet sandbox blocks fetch to external RPCs, so every read and write goes through the wallet.
 type Eip1193 = { request(a: { method: string; params?: unknown[] }): Promise<unknown> };
-const legacy = (window as unknown as { ethereum?: Eip1193 }).ethereum;
 
 // Wallet extensions can't answer inside the Freenet sandbox (opaque origin), so bridge.html, served from a normal
 // origin and opened as a popup, relays each request to the wallet there.
@@ -36,14 +35,10 @@ const bridge: Eip1193 = {
   },
 };
 
-// EIP-6963: several wallet extensions can be installed and only one owns window.ethereum, so let the user pick.
-const wallets: { name: string; provider: Eip1193 }[] = [{ name: "Wallet in popup", provider: bridge }, ...(legacy ? [{ name: "window.ethereum", provider: legacy }] : [])];
-let eth: Eip1193 | undefined = bridge;
 // A wallet that never answers (e.g. blocked inside the Freenet sandbox) must surface as an error, not a stuck button.
 const rpc = <T>(method: string, params: unknown[] = [], ms = 20_000) => {
-  if (!eth) throw new Error("No wallet found");
   return Promise.race([
-    eth.request({ method, params }) as Promise<T>,
+    bridge.request({ method, params }) as Promise<T>,
     new Promise<never>((_, no) => setTimeout(() => no(new Error(`Wallet did not answer ${method} within ${ms / 1000}s.`)), ms)),
   ]);
 };
@@ -78,9 +73,7 @@ $("app").innerHTML = `
     <p id="msg" role="status"></p>
   </section>
   <footer>
-    <label>Wallet <select id="wallet"></select></label>
     <button id="how" class="link" type="button">How it works</button>
-    <button id="diag" class="link" type="button">Diagnose wallet</button>
     <p class="muted">Uniswap V3, served from Freenet. Unaudited: use small amounts.</p>
     <p class="love">Made with <span aria-label="love">♥</span> by <a href="https://github.com/scobru" target="_blank" rel="noopener">scobru</a></p>
   </footer>
@@ -110,7 +103,7 @@ let best: { path: Hex; out: bigint; hops: number } | undefined;
 const verified = new Set<string>(); // chain ids whose contracts and tokens passed preflight this session
 const ready = () => !!account && verified.has(chain.id);
 const say = (t: string, link?: string) => { $("msg").textContent = t; if (link) $("msg").append(" ", Object.assign(document.createElement("a"), { href: link, target: "_blank", rel: "noopener", textContent: "View" })); };
-const confirmIn = () => (eth === bridge ? "the wallet popup (click its button)" : "your wallet");
+const confirmIn = () => "the wallet popup (click its button)";
 const fmt = (v: bigint, d: number) => { const [i, f = ""] = formatUnits(v, d).split("."); return f ? `${i}.${f.slice(0, 6).replace(/0+$/, "")}`.replace(/\.$/, "") : i; };
 
 async function preflight(c: Chain): Promise<string[]> {
@@ -250,28 +243,4 @@ $("flip").addEventListener("click", () => { [tin, tout] = [tout, tin]; $<HTMLInp
 $("bal").addEventListener("click", () => { $<HTMLInputElement>("amt").value = formatUnits(tin.native ? (bal * 99n) / 100n : bal, tin.decimals); void refresh(); });
 $("go").addEventListener("click", () => void run(!account ? connect : !ready() ? ensureChain : swapNow));
 $("how").addEventListener("click", () => $<HTMLDialogElement>("howto").showModal());
-// Facts about what the Freenet sandbox lets a wallet do, so we can pick a workaround without console sessions.
-$("diag").addEventListener("click", async () => {
-  const w = window.open("about:blank"); // first: popups need the click's user activation
-  w?.close();
-  const flags = ["isMetaMask", "isPhantom", "isRabby", "isBraveWallet", "isCoinbaseWallet"].filter((k) => (legacy as unknown as Record<string, unknown> | undefined)?.[k]);
-  const lines = [
-    `origin: ${window.origin}, framed: ${window.top !== window}`,
-    `window.ethereum: ${legacy ? flags.join(",") || "present, unknown wallet" : "none"}`,
-    `EIP-6963 wallets: ${wallets.slice(legacy ? 2 : 1).map((x) => x.name).join(", ") || "none"}`,
-    `window.open: ${w ? "allowed" : "blocked"}`,
-  ];
-  say(lines.join("\n"));
-  try { lines.push("eth_chainId: " + (await rpc<string>("eth_chainId", [], 5000))); } catch (e) { lines.push("eth_chainId: " + (e as Error).message); }
-  say(lines.join("\n"));
-});
-const sel = $("wallet") as HTMLSelectElement;
-const fill = () => { const i = Math.max(sel.selectedIndex, 0); sel.replaceChildren(...wallets.map((w, j) => new Option(w.name, String(j)))); sel.selectedIndex = i; eth = wallets[i]?.provider; };
-sel.addEventListener("change", () => { eth = wallets[sel.selectedIndex].provider; account = undefined; say(""); void refresh(); });
-addEventListener("eip6963:announceProvider", (e) => {
-  const d = (e as CustomEvent<{ info: { name: string }; provider: Eip1193 }>).detail;
-  if (!wallets.some((w) => w.name === d.info.name)) { wallets.push({ name: d.info.name, provider: d.provider }); fill(); }
-});
-dispatchEvent(new Event("eip6963:requestProvider"));
-fill();
 render();

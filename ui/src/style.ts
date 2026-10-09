@@ -31,7 +31,6 @@ select{font:inherit;font-weight:600;color:var(--text);background:var(--card);bor
 #msg:empty{display:none}
 #msg a{color:var(--accent)}
 footer{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin-top:20px;font-size:.85rem;color:var(--muted)}
-footer select{font-weight:400;padding:4px 8px}
 footer p{width:100%;margin:0}
 .love{text-align:center;margin-top:8px!important}.love span{color:var(--accent)}.love a{color:inherit;font-weight:600}
 dialog{max-width:28rem;width:calc(100% - 32px);border:1px solid var(--line);border-radius:24px;padding:20px;background:var(--card);color:var(--text)}
