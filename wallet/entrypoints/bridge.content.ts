@@ -1,9 +1,13 @@
+import { freenetSite } from '@/lib/freenet'
+
 // Isolated-world relay between the inpage provider and the background.
 export default defineContentScript({
   matches: ['https://*/*', 'http://localhost/*', 'http://127.0.0.1/*'], // no plain-http sites: see background.ts
   runAt: 'document_start',
+  allFrames: true, // only for Freenet app frames: main() leaves every other frame alone
   main() {
-    const post = (msg: object) => window.postMessage({ target: 'plainwallet-inpage', ...msg }, location.origin)
+    if (window !== window.top && !freenetSite(location.href)) return
+    const post = (msg: object) => window.postMessage({ target: 'plainwallet-inpage', ...msg }, window === window.top ? location.origin : '*') // a sandboxed frame's origin is opaque; the target is this same window either way
     const rpc = (method: string, params?: unknown[]) =>
       browser.runtime
         .sendMessage({ method, params })

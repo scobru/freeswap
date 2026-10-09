@@ -4,6 +4,7 @@ import { registerHooks } from 'node:module'
 import { describeCall, foreignSignIn, parseAddress, parseAmount, publicRpc, signedView } from './lib/describe.ts'
 import { checkSecret, decryptVault, deriveKey, encryptVault, mac, newMeta, newMnemonic, parseSecret, toAccount } from './lib/wallet.ts'
 import { decodeFunctionData, encodeFunctionData, erc20Abi, hashTypedData, recoverMessageAddress } from 'viem'
+import { freenetSite } from './lib/freenet.ts'
 import { approveTickets, buyTicket, megapotAbi, megapotSettings, REFERRER, tick } from './lib/megapot.ts'
 
 const MNEMONIC = 'test test test test test test test test test test test junk'
@@ -153,5 +154,11 @@ assert.equal(tick({ on: true, every: 1, count: 0 }).buy, true)
 const buy = decodeFunctionData({ abi: megapotAbi, data: buyTicket(ADDRESS).data })
 assert.deepEqual(buy.args, [1n, ADDRESS, [REFERRER], [10n ** 18n], `0x${'0'.repeat(64)}`])
 assert.equal(decodeFunctionData({ abi: erc20Abi, data: approveTickets(1_000_000n).data }).args[1], 10_000_000n)
+
+// Freenet app frames are told apart by contract key; nothing else on the local node or the web counts as one
+assert.equal(freenetSite('http://127.0.0.1:50509/v1/contract/web/Abc123/?__sandbox=1'), 'http://127.0.0.1:50509/v1/contract/web/Abc123')
+assert.equal(freenetSite('http://localhost:7509/v1/contract/web/Abc123/index.html'), 'http://localhost:7509/v1/contract/web/Abc123')
+for (const url of ['https://evil.com/v1/contract/web/Abc123/', 'http://127.0.0.1.evil.com/v1/contract/web/Abc123/', 'http://127.0.0.1:50509/other/', 'http://127.0.0.1:50509/v1/contract/web/', undefined])
+  assert.equal(freenetSite(url), undefined)
 
 console.log('ok')

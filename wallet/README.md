@@ -1,5 +1,7 @@
 # <img src="assets/icon.svg" width="28" align="top" alt=""> Plain Wallet
 
+> **FreeSwap fork** of [backmeupplz/plainwallet](https://github.com/backmeupplz/plainwallet) at `cd30452`, so the wallet works inside Freenet apps. Freenet serves each app in a sandboxed iframe that upstream ignores. Changes: the content scripts also run in Freenet app frames on the local node (`http://localhost|127.0.0.1:<port>/v1/contract/web/<key>/`), post to their own window with `'*'` (the frame's origin is opaque), and the background treats `<node>/v1/contract/web/<key>` as the site, so connecting one Freenet app never connects another (`lib/freenet.ts`). Every other iframe is still refused. Install it as in [Chrome](#chrome-and-brave-edge-other-chromium-browsers) below (`npm run build`, Load unpacked `.output/chrome-mv3`).
+
 A very minimal EVM wallet extension for Chrome, Firefox and Safari, and Android, iOS and Mac apps. ~1900 lines of TypeScript, three runtime dependencies ([viem](https://github.com/wevm/viem) and the bip39/hashing libraries it is built on), built with [WXT](https://github.com/wxt-dev/wxt). MIT.
 
 > Not audited. Don't keep funds in it that you can't afford to lose.

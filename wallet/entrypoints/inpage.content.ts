@@ -1,12 +1,15 @@
 import iconSvg from '@/assets/icon.svg?raw'
+import { freenetSite } from '@/lib/freenet'
 
 // Runs in the page's own JS world: the EIP-1193 provider dapps talk to. Holds no secrets;
 // every request goes page -> bridge content script -> background.
 export default defineContentScript({
   matches: ['https://*/*', 'http://localhost/*', 'http://127.0.0.1/*'], // no plain-http sites: see background.ts
   runAt: 'document_start',
+  allFrames: true, // only for Freenet app frames: main() leaves every other frame alone
   world: 'MAIN',
   main() {
+    if (window !== window.top && !freenetSite(location.href)) return
     const listeners: Record<string, Set<(data: unknown) => void>> = {}
     const waiting = new Map<number, { resolve: (v: unknown) => void; reject: (e: unknown) => void }>()
     let nextId = 1
@@ -29,7 +32,7 @@ export default defineContentScript({
         new Promise((resolve, reject) => {
           const id = nextId++
           waiting.set(id, { resolve, reject })
-          window.postMessage({ target: 'plainwallet-bridge', id, method, params }, location.origin)
+          window.postMessage({ target: 'plainwallet-bridge', id, method, params }, window === window.top ? location.origin : '*') // a sandboxed frame's origin is opaque; the target is this same window either way
         }).then((result) => {
           if (method === 'eth_accounts' || method === 'eth_requestAccounts') provider.selectedAddress = (result as string[])[0] ?? null
           return result

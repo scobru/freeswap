@@ -3,6 +3,7 @@ import { readContract } from 'viem/actions'
 import { broadcast, client, mined, noRedirect, prepare, send, tokenInfo, unsigned } from '@/lib/chain'
 import { clean, describeCall, foreignSignIn, publicRpc, signedView } from '@/lib/describe'
 import { allowanceOf, approveTickets, BASE, buyTicket, JACKPOT, megapotAbi, megapotSettings, tick, TICKETS_PER_APPROVAL, USDC } from '@/lib/megapot'
+import { freenetSite } from '@/lib/freenet'
 import { checkResponse, requestText, type OfflineRequest } from '@/lib/offline'
 import { keepExported, load, lock, reset, save, signer, watchedAddresses, type Network } from '@/lib/store'
 
@@ -291,10 +292,13 @@ export default defineBackground(() => {
       return
     }
     // Content script. The origin comes from the browser, never from the page.
-    const origin = sender.origin ?? new URL(sender.url!).origin
+    // A Freenet app frame is identified by its contract key, not its origin (see lib/freenet.ts); any other frame is refused.
+    const freenet = freenetSite(sender.url)
+    if (sender.frameId && !freenet) return respond({ error: err(4100, 'Plain Wallet only works in the top window') })
+    const origin = freenet ?? sender.origin ?? new URL(sender.url!).origin
     // https only (plus local dev servers): on plain http anyone on the network path could inject a page that talks to
     // the wallet as that site. Sandboxed pages all report the origin "null"; approving one would connect every such page.
-    if (!/^https:\/\/|^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return respond({ error: err(4100, 'Plain Wallet only works on https sites') })
+    if (!freenet && !/^https:\/\/|^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return respond({ error: err(4100, 'Plain Wallet only works on https sites') })
     // A site can't freeze the approval window, or the wallet, with a huge payload.
     if (size(msg.params) > 512_000) return respond({ error: err(-32602, 'Request too large') })
     handle(origin, msg.method, msg.params, sender.tab?.title && clean(sender.tab.title, 80)).then(
