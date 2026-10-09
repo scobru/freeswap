@@ -4,7 +4,10 @@ import { abi, quoteCall, swapCall, type Dir } from "./swap.ts";
 
 // Wallet-only: the Freenet sandbox blocks fetch to external RPCs, so every read and write goes through window.ethereum.
 type Eip1193 = { request(a: { method: string; params?: unknown[] }): Promise<unknown> };
-const eth = (window as unknown as { ethereum?: Eip1193 }).ethereum;
+const legacy = (window as unknown as { ethereum?: Eip1193 }).ethereum;
+// EIP-6963: several wallet extensions can be installed and only one owns window.ethereum, so let the user pick.
+const wallets: { name: string; provider: Eip1193 }[] = legacy ? [{ name: "window.ethereum", provider: legacy }] : [];
+let eth: Eip1193 | undefined = legacy;
 // A wallet that never answers (e.g. blocked inside the Freenet sandbox) must surface as an error, not a stuck button.
 const rpc = <T>(method: string, params: unknown[] = [], ms = 20_000) => {
   if (!eth) throw new Error("No wallet found (window.ethereum)");
@@ -22,6 +25,7 @@ const $ = (id: string) => document.getElementById(id)!;
 $("app").innerHTML = `
   <h1>FreeSwap</h1>
   <p class="sub">Uniswap V3 on Base, served from Freenet. Unaudited: use small amounts.</p>
+  <label>Wallet <select id="wallet"></select></label>
   <label>You pay <span id="bal"></span></label>
   <div class="row"><input id="amt" inputmode="decimal" placeholder="0.0" autocomplete="off"><b id="symIn">ETH</b></div>
   <button id="flip" type="button">&#8645;</button>
@@ -146,4 +150,13 @@ let timer: number | undefined;
 $("amt").addEventListener("input", () => { label(); clearTimeout(timer); timer = window.setTimeout(() => void refresh(), 400); });
 $("flip").addEventListener("click", () => { dir = dir === "eth-usdc" ? "usdc-eth" : "eth-usdc"; ($("amt") as HTMLInputElement).value = ""; void refresh(); });
 $("go").addEventListener("click", () => void act());
-if (!eth) say("No wallet detected in this page.");
+const sel = $("wallet") as HTMLSelectElement;
+const fill = () => { const i = Math.max(sel.selectedIndex, 0); sel.replaceChildren(...wallets.map((w, j) => new Option(w.name, String(j)))); sel.selectedIndex = i; eth = wallets[i]?.provider; };
+sel.addEventListener("change", () => { eth = wallets[sel.selectedIndex].provider; account = undefined; ready = false; say(""); void refresh(); });
+addEventListener("eip6963:announceProvider", (e) => {
+  const d = (e as CustomEvent<{ info: { name: string }; provider: Eip1193 }>).detail;
+  if (!wallets.some((w) => w.name === d.info.name)) { wallets.push({ name: d.info.name, provider: d.provider }); fill(); }
+});
+dispatchEvent(new Event("eip6963:requestProvider"));
+fill();
+if (!wallets.length) say("No wallet detected in this page.");
