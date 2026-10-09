@@ -22,7 +22,8 @@ addEventListener("message", (e) => {
 const bridge: Eip1193 = {
   request({ method, params }) {
     if (!popup || popup.closed) {
-      popup = window.open(BRIDGE_URL, "freeswap-bridge", "popup,width=420,height=600"); // needs this click's user activation
+      // A fresh URL each time: browsers kept serving a stale bridge.html (whose old script was gone) after a deploy.
+      popup = window.open(`${BRIDGE_URL}?t=${Date.now()}`, "freeswap-bridge", "popup,width=420,height=600"); // needs this click's user activation
       if (!popup) return Promise.reject(new Error("The wallet popup was blocked. Allow popups for FreeSwap and try again."));
       popupReady = new Promise((r) => (onReady = r));
     }
