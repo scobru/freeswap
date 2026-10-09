@@ -33,6 +33,15 @@ select{font:inherit;font-weight:600;color:var(--text);background:var(--card);bor
 footer{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin-top:20px;font-size:.85rem;color:var(--muted)}
 footer select{font-weight:400;padding:4px 8px}
 footer p{width:100%;margin:0}
+.love{text-align:center;margin-top:8px!important}.love span{color:var(--accent)}.love a{color:inherit;font-weight:600}
+dialog{max-width:28rem;width:calc(100% - 32px);border:1px solid var(--line);border-radius:24px;padding:20px;background:var(--card);color:var(--text)}
+dialog::backdrop{background:rgb(0 0 0 / .55)}
+dialog h2{margin:0 0 12px;font-size:1.2rem}dialog h3{margin:16px 0 6px;font-size:1rem}
+dialog ul{margin:0;padding-left:18px;font-size:.9rem}dialog li+li{margin-top:4px}dialog p{font-size:.9rem;margin:0}
+.flow{list-style:none;margin:0;padding:0;display:grid;gap:22px}
+.flow li{position:relative;background:var(--box);border-radius:14px;padding:10px 12px;font-size:.9rem;display:grid;gap:2px}
+.flow li+li::before{content:"↓";position:absolute;top:-21px;left:50%;transform:translateX(-50%);color:var(--accent)}
+.flow b{font-size:.95rem}.flow span{color:var(--muted)}
 button:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .box:focus-within{box-shadow:inset 0 0 0 1px var(--accent)}
 `;

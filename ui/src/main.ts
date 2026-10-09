@@ -79,9 +79,30 @@ $("app").innerHTML = `
   </section>
   <footer>
     <label>Wallet <select id="wallet"></select></label>
+    <button id="how" class="link" type="button">How it works</button>
     <button id="diag" class="link" type="button">Diagnose wallet</button>
     <p class="muted">Uniswap V3, served from Freenet. Unaudited: use small amounts.</p>
-  </footer>`;
+    <p class="love">Made with <span aria-label="love">♥</span> by <a href="https://github.com/scobru" target="_blank" rel="noopener">scobru</a></p>
+  </footer>
+  <dialog id="howto" aria-labelledby="howTitle">
+    <h2 id="howTitle">How it works</h2>
+    <ol class="flow">
+      <li><b>Freenet</b><span>serves this page from a contract, in a sandboxed frame. No server, no domain to take down.</span></li>
+      <li><b>Wallet popup</b><span>a small page on GitHub Pages. Wallet extensions can't reach the sandbox, so the popup talks to your wallet and relays each request.</span></li>
+      <li><b>Your wallet</b><span>reads the chain and asks you to confirm every transaction. Keys never leave it.</span></li>
+      <li><b>Uniswap V3</b><span>on Ethereum or Base: quotes from QuoterV2, swaps through SwapRouter02.</span></li>
+    </ol>
+    <h3>Safety</h3>
+    <ul>
+      <li>The popup only passes on reads, chain switches to Ethereum or Base, token approvals for the Uniswap router, and swaps that pay out to you. Everything else is refused.</li>
+      <li>On connect the page checks the Uniswap contracts and every token's decimals onchain.</li>
+      <li>Each quote tries every fee tier and a route through WETH, and keeps the best. You get at least the minimum shown (${Number(SLIPPAGE_BPS) / 100}% slippage) or the swap reverts.</li>
+      <li>Approvals are for the exact amount, never unlimited.</li>
+    </ul>
+    <h3>Privacy</h3>
+    <p class="muted">Swaps are public onchain, like on any DEX. Your wallet's RPC provider and GitHub Pages see your IP; Freenet keeps the app itself uncensorable.</p>
+    <form method="dialog"><button class="primary" type="submit">Got it</button></form>
+  </dialog>`;
 
 let chain: Chain = CHAINS[0], tin: Token = chain.tokens[0], tout: Token = chain.tokens[1];
 let account: Address | undefined, bal = 0n, amountIn = 0n, allowance = 0n, busy = false;
@@ -228,6 +249,7 @@ $("flip").addEventListener("click", () => { [tin, tout] = [tout, tin]; $<HTMLInp
 // shortcut: Max on ETH keeps 1% back for gas, a rough reserve; estimate the fee if users hit "insufficient funds".
 $("bal").addEventListener("click", () => { $<HTMLInputElement>("amt").value = formatUnits(tin.native ? (bal * 99n) / 100n : bal, tin.decimals); void refresh(); });
 $("go").addEventListener("click", () => void run(!account ? connect : !ready() ? ensureChain : swapNow));
+$("how").addEventListener("click", () => $<HTMLDialogElement>("howto").showModal());
 // Facts about what the Freenet sandbox lets a wallet do, so we can pick a workaround without console sessions.
 $("diag").addEventListener("click", async () => {
   const w = window.open("about:blank"); // first: popups need the click's user activation
@@ -252,3 +274,4 @@ addEventListener("eip6963:announceProvider", (e) => {
 });
 dispatchEvent(new Event("eip6963:requestProvider"));
 fill();
+render();
