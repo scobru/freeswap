@@ -27,11 +27,22 @@ assert.equal(deadline, 99n);
 assert.deepEqual(decodeFunctionData({ abi, data: inner[1] }).args, [minOut(10n ** 15n, 50n), user]);
 
 // The bridge relays FreeSwap's own transactions and nothing that could pay someone else
-const tx = (to: string, data: `0x${string}`, value = 0n, from = user) => [{ from, to, data, value: "0x" + value.toString(16) }];
+const tx = (to: string, data: `0x${string}`, value = 0n, from = user, chainId = "0x2105") => [{ from, to, data, value: "0x" + value.toString(16), chainId }];
 const thief = "0x2222222222222222222222222222222222222222";
 assert.equal(refuse("eth_sendTransaction", tx(base.router, sell.data, sell.value), user), undefined);
 assert.equal(refuse("eth_sendTransaction", tx(base.router, buy.data), user), undefined);
-assert.equal(refuse("eth_sendTransaction", tx(mainnet.router, sell.data, sell.value), user), undefined);
+assert.ok(refuse("eth_sendTransaction", tx(mainnet.router, sell.data, sell.value), user)); // Base path on mainnet's router
+const mEth = mainnet.tokens[0], mUsdc = mainnet.tokens[1];
+const mSell = swapCall(mEth, mUsdc, encodePath([mEth.address, mUsdc.address], [500]), user, 1n, 2_000n, 50n, 99n);
+assert.equal(refuse("eth_sendTransaction", tx(mainnet.router, mSell.data, mSell.value, user, "0x1"), user), undefined);
+assert.ok(refuse("eth_sendTransaction", tx(mainnet.router, mSell.data, mSell.value, user), user)); // chainId says Base
+assert.ok(refuse("eth_sendTransaction", [{ ...tx(base.router, sell.data, sell.value)[0], chainId: undefined }], user)); // no chainId
+// Pools made from an attacker's token, odd fee tiers and zero minimums are refused
+const junk = encodePath([eth.address, thief, usdc.address], [500, 500]);
+assert.ok(refuse("eth_sendTransaction", tx(base.router, swapCall(eth, usdc, junk, user, 1n, 1000n, 50n, 99n).data, 1n), user));
+assert.ok(refuse("eth_sendTransaction", tx(base.router, swapCall(eth, usdc, encodePath([eth.address, usdc.address], [77]), user, 1n, 1000n, 50n, 99n).data, 1n), user));
+assert.ok(refuse("eth_sendTransaction", tx(base.router, swapCall(eth, usdc, path, user, 1n, 0n, 50n, 99n).data, 1n), user));
+assert.ok(refuse("eth_sendTransaction", tx(base.router, swapCall(usdc, eth, back, user, 1n, 0n, 50n, 99n).data), user));
 assert.equal(refuse("eth_sendTransaction", tx(usdc.address, encodeFunctionData({ abi, functionName: "approve", args: [base.router, 5n] })), user), undefined);
 assert.ok(refuse("eth_sendTransaction", tx(base.router, swapCall(eth, usdc, path, thief, 1n, 1n, 50n, 99n).data, 1n), user)); // output to someone else
 assert.ok(refuse("eth_sendTransaction", tx(base.router, swapCall(usdc, eth, back, thief, 1n, 1n, 50n, 99n).data), user));
