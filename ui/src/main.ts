@@ -130,7 +130,7 @@ async function ensureChain() {
 }
 
 const balanceOf = async (t: Token) => (t.native ? BigInt(await rpc<string>("eth_getBalance", [account, "latest"])) : (read(t.address, "balanceOf", [account]) as Promise<bigint>));
-const parse = () => { try { return parseUnits($<HTMLInputElement>("amt").value.trim() || "0", tin.decimals); } catch { return 0n; } };
+const parse = () => { try { const v = parseUnits($<HTMLInputElement>("amt").value.trim() || "0", tin.decimals); return v > 0n ? v : 0n; } catch { return 0n; } };
 
 async function quote(amount: bigint) {
   const quotes = await Promise.allSettled(routes(chain, tin, tout).map(async (path) => ({ path, out: decodeFunctionResult({ abi, functionName: "quoteExactInput", data: await ethCall(chain.quoter, quoteCall(path, amount)) })[0] })));
@@ -158,16 +158,20 @@ function render() {
   go.textContent = !account ? "Connect wallet" : !ready() ? `Switch to ${chain.name}` : amountIn === 0n ? "Enter an amount" : amountIn > bal ? `Insufficient ${tin.symbol}` : !best ? "No route" : !tin.native && amountIn > allowance ? `Approve ${tin.symbol}` : "Swap";
 }
 
+let seq = 0; // a slow quote for an older amount or pair must not overwrite a newer one
 async function refresh() {
+  const mine = ++seq;
   amountIn = parse();
   best = undefined;
   if (ready()) {
     try {
-      [bal, allowance] = await Promise.all([balanceOf(tin), tin.native ? 0n : read(tin.address, "allowance", [account, chain.router])]);
-      if (amountIn > 0n) best = await quote(amountIn);
-    } catch (e) { say((e as Error).message); }
+      const [b, a] = await Promise.all([balanceOf(tin), tin.native ? 0n : read(tin.address, "allowance", [account, chain.router])]);
+      const q = amountIn > 0n ? await quote(amountIn) : undefined;
+      if (mine !== seq) return;
+      [bal, allowance, best] = [b, a, q];
+    } catch (e) { if (mine === seq) say((e as Error).message); }
   }
-  render();
+  if (mine === seq) render();
 }
 
 async function pickChain(c: Chain) {
@@ -194,7 +198,7 @@ async function wait(hash: Hex) {
   throw new Error("Timed out waiting for " + hash);
 }
 async function send(to: Address, data: Hex, value = 0n) {
-  const hash = await rpc<Hex>("eth_sendTransaction", [{ from: account, to, data, value: "0x" + value.toString(16) }], 180_000);
+  const hash = await rpc<Hex>("eth_sendTransaction", [{ from: account, to, data, value: "0x" + value.toString(16), chainId: chain.id }], 180_000);
   say("Pending…", chain.explorer + hash);
   await wait(hash);
   return hash;
@@ -228,7 +232,7 @@ async function run(task: () => Promise<void>) {
 }
 
 let timer: number | undefined;
-$("amt").addEventListener("input", () => { amountIn = parse(); best = undefined; render(); clearTimeout(timer); timer = window.setTimeout(() => void refresh(), 400); });
+$("amt").addEventListener("input", () => { seq++; amountIn = parse(); best = undefined; render(); clearTimeout(timer); timer = window.setTimeout(() => void refresh(), 400); });
 // Picking the token already on the other side swaps the two, as on Uniswap.
 const pick = (side: "tin" | "tout") => (e: Event) => {
   const t = chain.tokens.find((x) => x.symbol === (e.target as HTMLSelectElement).value)!;
