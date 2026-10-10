@@ -75,7 +75,7 @@ $("app").innerHTML = `
   <footer>
     <button id="how" class="link" type="button">How it works</button>
     <p class="muted">Uniswap V3, served from Freenet. Unaudited: use small amounts.</p>
-    <p class="love">Made with <span aria-label="love">♥</span> by <a href="https://github.com/scobru" target="_blank" rel="noopener">scobru</a></p>
+    <p class="love"><a href="https://github.com/scobru/freeswap" target="_blank" rel="noopener noreferrer">github.com/scobru/freeswap</a> · Made with <span aria-label="love">♥</span> by <a href="https://scobrudot.dev" target="_blank" rel="noopener noreferrer">scobru</a></p>
   </footer>
   <dialog id="howto" aria-labelledby="howTitle">
     <h2 id="howTitle">How it works</h2>
